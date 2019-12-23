@@ -21,8 +21,6 @@ struct Txn{
 impl Txn {
     fn execute(&self, fork: &Fork, block_id: u32) {
 
-        let tx_hash = self.object_hash();
-
         let mut schema = Schema::new(fork);
         // put in txn trie one for each block
         let mut txn_root = schema.txn_trie.get(&block_id);
@@ -105,6 +103,7 @@ fn create_user(name: &str) -> PublicKey {
 fn main(){
     let db = TemporaryDB::new();
     let alice = create_user("Alice");
+    let brain = create_user("brain");
 
     let tx1 = Txn{ user: alice, data:100_u32};
     let tx2 = Txn{ user: alice, data:200_u32};
@@ -113,6 +112,28 @@ fn main(){
 
     tx1.execute(&fork,0);
     tx2.execute(&fork,0);
+
+
+    db.merge(fork.into_patch()).unwrap();
+
+
+    let fork = db.fork();
+    let schema = Schema::new(&fork);
+
+    let proof1 = schema.state_trie.get_multiproof(vec![alice]);
+    let checked_proof1 = proof1.check().unwrap();
+
+    let proof2 = schema.state_trie.get_multiproof(vec![]);
+    let checked_proof2 = proof2.check().unwrap();
+    // assert_eq!(checked_proof1,checked_proof2);
+    println!("{:?}", checked_proof1.index_hash());
+    println!("{:?}", checked_proof2.index_hash());
+
+
+
+
+
+
 }
 
 
