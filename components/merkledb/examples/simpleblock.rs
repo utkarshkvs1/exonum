@@ -8,9 +8,14 @@ use exonum_derive::*;
 use exonum_merkledb::{
     access::{Access, RawAccessMut},
     impl_object_hash_for_binary_value, BinaryValue, Database, Fork, Group, ListIndex, MapIndex,
-    ObjectHash, ProofListIndex, ProofMapIndex, TemporaryDB,
+    ObjectHash, ProofListIndex, ProofMapIndex, TemporaryDB, RocksDB, DbOptions,
 };
 
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+struct TxnPool{
+    txns: Vec<Txn>,
+}
 
 // This is supposed to be generic
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -18,12 +23,13 @@ struct Txn{
     user: PublicKey,
     data: u32,
 }
+
 impl Txn {
-    fn execute(&self, fork: &Fork, block_id: u32) {
+    fn execute(&self, fork: &Fork, block_id: &u32) {
 
         let mut schema = Schema::new(fork);
         // put in txn trie one for each block
-        let mut txn_root = schema.txn_trie.get(&block_id);
+        let mut txn_root = schema.txn_trie.get(block_id);
         txn_root.put(&self.object_hash(), *self);
 
         // State transformation logic goes here #global
@@ -52,6 +58,19 @@ struct Block{
     txn_root: Hash,
     state_root: Hash,
     prev_block: Hash,
+}
+
+impl Block{
+    
+    fn execute(&self, txn_pool: &TxnPool)
+    {
+        let db_options:DbOptions = Default::default();
+        let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
+        let fork = db.fork();
+        for txn in &txn_pool.txns {
+            txn.execute(&fork, &self.block_id);
+        }
+    }
 }
 
 
@@ -88,7 +107,7 @@ impl_object_hash_for_binary_value! { Txn, Block, State }
 #[derive(FromAccess)]
 struct Schema<T: Access> {
     pub txn_trie: Group<T,u32 , ProofMapIndex<T::Base, Hash, Txn > >,
-    pub blocks: ListIndex<T::Base, Hash>,
+    pub blocks: ListIndex<T::Base, Block>,
     pub state_trie: ProofMapIndex<T::Base, PublicKey, State>,
     pub storage_trie: Group<T, PublicKey, ProofMapIndex<T::Base, Hash, Txn > >,
 }
@@ -101,17 +120,22 @@ fn create_user(name: &str) -> PublicKey {
 
 
 fn main(){
-    let db = TemporaryDB::new();
+    // let db = TemporaryDB::new();
+    let db_options:DbOptions = Default::default();
+    let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
     let alice = create_user("Alice");
     let brain = create_user("brain");
+
+    let txn_pool: TxnPool = Default::default();
+
 
     let tx1 = Txn{ user: alice, data:100_u32};
     let tx2 = Txn{ user: alice, data:200_u32};
 
     let fork = db.fork();
 
-    tx1.execute(&fork,0);
-    tx2.execute(&fork,0);
+    tx1.execute(&fork,&0);
+    tx2.execute(&fork,&0);
 
 
     db.merge(fork.into_patch()).unwrap();
@@ -122,6 +146,7 @@ fn main(){
 
     let proof1 = schema.state_trie.get_multiproof(vec![alice]);
     let checked_proof1 = proof1.check().unwrap();
+    println!("{:?}", schema.state_trie.get(&alice).unwrap_or_default().balance);
 
     let proof2 = schema.state_trie.get_multiproof(vec![]);
     let checked_proof2 = proof2.check().unwrap();
