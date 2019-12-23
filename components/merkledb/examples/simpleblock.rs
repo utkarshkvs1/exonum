@@ -18,14 +18,14 @@ struct Txn{
     user: PublicKey,
     data: u32,
 }
-impl Transaction {
+impl Txn {
     fn execute(&self, fork: &Fork, block_id: u32) {
 
         let tx_hash = self.object_hash();
 
         let mut schema = Schema::new(fork);
         // put in txn trie one for each block
-        let mut txn_root = schema.txn_trie.get(block_id).unwrap_or_default();
+        let mut txn_root = schema.txn_trie.get(&block_id);
         txn_root.put(&self.object_hash(), *self);
 
         // State transformation logic goes here #global
@@ -34,7 +34,7 @@ impl Transaction {
         schema.state_trie.put(&self.user, state_user);
         // state transformation logic ends
 
-        let mut storage_root = schema.storage_trie.get(&self.user).unwrap_or_default();
+        let mut storage_root = schema.storage_trie.get(&self.user);
         storage_root.put(&self.object_hash(),*self);
     }
 }
@@ -66,7 +66,7 @@ impl BinaryValue for Block {
         bincode::deserialize(bytes.as_ref()).map_err(From::from)
     }
 }
-
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
 struct State{
     uid: PublicKey,
     storage_root: Hash,
@@ -89,10 +89,10 @@ impl_object_hash_for_binary_value! { Txn, Block, State }
 
 #[derive(FromAccess)]
 struct Schema<T: Access> {
-    pub txn_trie: Group<T,block_id , ProofMapIndex<T::Base, Hash, txn > >,
+    pub txn_trie: Group<T,u32 , ProofMapIndex<T::Base, Hash, Txn > >,
     pub blocks: ListIndex<T::Base, Hash>,
-    pub state_trie: ProofMapIndex<PublicKey, State>,
-    pub storage_trie: Group<T, PublicKey, ProofMapIndex<T::Base, Hash, txn > >,
+    pub state_trie: ProofMapIndex<T::Base, PublicKey, State>,
+    pub storage_trie: Group<T, PublicKey, ProofMapIndex<T::Base, Hash, Txn > >,
 }
 
 
@@ -106,8 +106,8 @@ fn main(){
     let db = TemporaryDB::new();
     let alice = create_user("Alice");
 
-    let tx1 = Txn{ user: alice, 100_u32};
-    let tx2 = Txn{ user: alice, 200_u32};
+    let tx1 = Txn{ user: alice, data:100_u32};
+    let tx2 = Txn{ user: alice, data:200_u32};
 
     let fork = db.fork();
 
