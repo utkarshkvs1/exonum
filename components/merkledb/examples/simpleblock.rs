@@ -62,14 +62,25 @@ struct Block{
 
 impl Block{
     
-    fn execute(&self, txn_pool: &TxnPool)
+    fn execute(&mut self, txn_pool: &TxnPool)
     {
+        // let block:Block = Default::default();
+        
+
         let db_options:DbOptions = Default::default();
         let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
         let fork = db.fork();
+        self.block_id = 
+        {
+            let schema = Schema::new(&fork);
+            schema.blocks.len() as u32
+        };
+
         for txn in &txn_pool.txns {
             txn.execute(&fork, &self.block_id);
         }
+
+        db.merge(fork.into_patch()).unwrap();
     }
 }
 
