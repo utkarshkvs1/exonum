@@ -61,8 +61,16 @@ struct Block{
 }
 
 impl Block{
+
+    fn genesis() -> Block{
+        let gen: Block = Default::default();
+        gen
+    }
+    fn new() -> Block{
+        Default::default()
+    }
     
-    fn execute(&mut self, txn_pool: &TxnPool)
+    fn execute(&mut self, txn_pool: &mut TxnPool)
     {
         // let block:Block = Default::default();
         
@@ -80,7 +88,33 @@ impl Block{
             txn.execute(&fork, &self.block_id);
         }
 
+
+        
+        self.txn_root = {
+            let schema = Schema::new(&fork);
+            let txn_trie = schema.txn_trie.get(&self.block_id);
+            let proof = txn_trie.get_multiproof(vec![]);
+            proof.check().unwrap().index_hash()
+
+        };
+
+        self.state_root = {
+            let schema = Schema::new(&fork);
+            let proof = schema.state_trie.get_multiproof(vec![]);
+            proof.check().unwrap().index_hash()
+
+        };
+        self.prev_block = {
+            let schema = Schema::new(&fork);
+            schema.blocks.last().unwrap().object_hash()
+        };
+
+        {
+            let mut schema = Schema::new(&fork);
+            schema.blocks.push(*self);
+        }
         db.merge(fork.into_patch()).unwrap();
+        txn_pool.txns.clear();
     }
 }
 
@@ -131,6 +165,15 @@ fn create_user(name: &str) -> PublicKey {
 
 
 fn main(){
+    let mut block = Block::genesis();
+    let mut txn_pool:TxnPool = Default::default();
+    block.execute(&mut txn_pool);
+    let alice = create_user("Alice");
+    
+}
+
+
+fn main1(){
     // let db = TemporaryDB::new();
     let db_options:DbOptions = Default::default();
     let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
@@ -164,6 +207,7 @@ fn main(){
     // assert_eq!(checked_proof1,checked_proof2);
     println!("{:?}", checked_proof1.index_hash());
     println!("{:?}", checked_proof2.index_hash());
+    println!("{:?}", Block::genesis());
 
 
 
