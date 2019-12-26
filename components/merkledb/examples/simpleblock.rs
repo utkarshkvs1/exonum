@@ -74,7 +74,6 @@ impl Block{
     
     fn execute(&mut self, fork: &Fork, txn_pool: &mut TxnPool)
     {
-        // let block:Block = Default::default();
         
         self.block_id = 
         {
@@ -107,12 +106,11 @@ impl Block{
             schema.blocks.last().unwrap().object_hash()
         };
 
-        {
+        
             let mut schema = Schema::new(fork);
             schema.blocks.push(*self);
-        }
         
-        txn_pool.txns.clear();
+        
     }
 }
 
@@ -162,38 +160,105 @@ fn create_user(name: &str) -> PublicKey {
 }
 
 
+pub struct BlockChain{
+    
+    pool: TxnPool,
+    db: RocksDB,
+
+}
+
+
+impl BlockChain{
+    fn init() -> BlockChain{
+        // TODO: should clear existing data;
+        let db_options:DbOptions = Default::default();
+        let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
+        let fork = db.fork();
+        Block::genesis(&fork);
+        let pool:TxnPool = Default::default();
+        BlockChain { pool: pool, db:db }
+
+    }
+
+    fn add_txn(&mut self, txn: Txn){
+        self.pool.txns.push(txn);
+    }
+
+    // TODO: add validations and all
+
+    fn exec_block(&mut self) -> Fork{
+        let fork = self.db.fork();
+        if self.pool.txns.len() == 0{
+            fork
+        }
+        else
+        {
+            let mut block = Block::new();
+            block.execute(&fork, &mut self.pool);
+            fork
+        }
+    }
+
+    fn commit_block(&mut self, fork: Fork){
+        self.pool.txns.clear();
+        self.db.merge(fork.into_patch()).unwrap();
+
+    }
+}
+
 fn main(){
-
-
-
-    let db_options:DbOptions = Default::default();
-    let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
-    let fork = db.fork();
-
-    let mut txn_pool:TxnPool = Default::default();
-    Block::genesis(&fork);
+    let mut block_chain = BlockChain::init();
 
     let alice = create_user("Alice");
     let tx1 = Txn{ user: alice, data:100_u32};
     let tx2 = Txn{ user: alice, data:200_u32};
-    let mut txn_pool:TxnPool = Default::default();
-    txn_pool.txns.push(tx1);
-    txn_pool.txns.push(tx2);
-    let mut block = Block::new();
-    block.execute(&fork, &mut txn_pool);
-    
 
-    db.merge(fork.into_patch()).unwrap();
-    // let mut block = Block::genesis();
-    
-    // block.execute(&mut txn_pool);
-    // let alice = create_user("Alice");
-    let fork = db.fork();
+    block_chain.add_txn(tx1);
+    block_chain.add_txn(tx2);
+
+    let fork = block_chain.exec_block();
+
+    block_chain.commit_block(fork);
+
+
+    let fork = block_chain.db.fork();
     let schema = Schema::new(&fork);
     println!("{:?}", schema.state_trie.get(&alice).unwrap_or_default().balance);
-
     
 }
+
+// fn main(){
+
+
+
+//     let db_options:DbOptions = Default::default();
+//     let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
+//     let fork = db.fork();
+
+//     let mut txn_pool:TxnPool = Default::default();
+//     Block::genesis(&fork);
+
+//     let alice = create_user("Alice");
+//     let tx1 = Txn{ user: alice, data:100_u32};
+//     let tx2 = Txn{ user: alice, data:200_u32};
+//     let mut txn_pool:TxnPool = Default::default();
+//     txn_pool.txns.push(tx1);
+//     txn_pool.txns.push(tx2);
+//     let mut block = Block::new();
+//     block.execute(&fork, &mut txn_pool);
+    
+
+//     db.merge(fork.into_patch()).unwrap();
+//     // let mut block = Block::genesis();
+    
+//     // block.execute(&mut txn_pool);
+//     // let alice = create_user("Alice");
+//     let fork = db.fork();
+//     let schema = Schema::new(&fork);
+//     println!("{:?}", schema.state_trie.get(&alice).unwrap_or_default().balance);
+
+    
+// }
 
 
 // fn main1(){
