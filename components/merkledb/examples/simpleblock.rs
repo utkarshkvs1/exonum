@@ -62,11 +62,16 @@ struct Block{
 
 impl Block{
 
-    fn genesis(fork: &Fork) -> Block{
+
+    // TODO: this function should check that our blocks
+    // are up-to-date with other nodes
+    fn genesis(fork: &Fork){
         let gen: Block = Default::default();
         let mut schema = Schema::new(fork);
-        schema.blocks.push(gen);
-        gen
+        if(schema.blocks.len() == 0){
+            schema.blocks.push(gen);
+        }
+        println!("{}", schema.blocks.len());
     }
     fn new() -> Block{
         Default::default()
@@ -107,8 +112,8 @@ impl Block{
         };
 
         
-            let mut schema = Schema::new(fork);
-            schema.blocks.push(*self);
+        let mut schema = Schema::new(fork);
+        schema.blocks.push(*self);
         
         
     }
@@ -175,6 +180,7 @@ impl BlockChain{
         let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
         let fork = db.fork();
         Block::genesis(&fork);
+        db.merge(fork.into_patch()).unwrap();
         let pool:TxnPool = Default::default();
         BlockChain { pool: pool, db:db }
 
@@ -226,86 +232,6 @@ fn main(){
     println!("{:?}", schema.state_trie.get(&alice).unwrap_or_default().balance);
     
 }
-
-// fn main(){
-
-
-
-//     let db_options:DbOptions = Default::default();
-//     let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
-//     let fork = db.fork();
-
-//     let mut txn_pool:TxnPool = Default::default();
-//     Block::genesis(&fork);
-
-//     let alice = create_user("Alice");
-//     let tx1 = Txn{ user: alice, data:100_u32};
-//     let tx2 = Txn{ user: alice, data:200_u32};
-//     let mut txn_pool:TxnPool = Default::default();
-//     txn_pool.txns.push(tx1);
-//     txn_pool.txns.push(tx2);
-//     let mut block = Block::new();
-//     block.execute(&fork, &mut txn_pool);
-    
-
-//     db.merge(fork.into_patch()).unwrap();
-//     // let mut block = Block::genesis();
-    
-//     // block.execute(&mut txn_pool);
-//     // let alice = create_user("Alice");
-//     let fork = db.fork();
-//     let schema = Schema::new(&fork);
-//     println!("{:?}", schema.state_trie.get(&alice).unwrap_or_default().balance);
-
-    
-// }
-
-
-// fn main1(){
-//     // let db = TemporaryDB::new();
-//     let db_options:DbOptions = Default::default();
-//     let db = RocksDB::open("dbtest/rocksdb",&db_options).unwrap();
-//     // let alice = create_user("Alice");
-//     let brain = create_user("brain");
-
-//     let txn_pool: TxnPool = Default::default();
-
-
-//     let tx1 = Txn{ user: alice, data:100_u32};
-//     let tx2 = Txn{ user: alice, data:200_u32};
-
-//     let fork = db.fork();
-
-//     tx1.execute(&fork,&0);
-//     tx2.execute(&fork,&0);
-
-
-//     db.merge(fork.into_patch()).unwrap();
-
-
-//     let fork = db.fork();
-//     let schema = Schema::new(&fork);
-
-//     let proof1 = schema.state_trie.get_multiproof(vec![alice]);
-//     let checked_proof1 = proof1.check().unwrap();
-//     println!("{:?}", schema.state_trie.get(&alice).unwrap_or_default().balance);
-
-//     let proof2 = schema.state_trie.get_multiproof(vec![]);
-//     let checked_proof2 = proof2.check().unwrap();
-//     // assert_eq!(checked_proof1,checked_proof2);
-//     println!("{:?}", checked_proof1.index_hash());
-//     println!("{:?}", checked_proof2.index_hash());
-//     println!("{:?}", Block::genesis());
-
-
-
-
-
-
-// }
-
-
-
 
 
 
